@@ -36,11 +36,15 @@ uint8_t ovm_idx3::child_index () const {
 }
 
 uint8_t ovm_idx3::leaf_zidx () const {
-	return z & 7;
+//	return z & 7;
+	return (BIT(z,2) << 2) | (BIT(y, 2) << 1) | BIT(x, 2);
 }
 
 uint8_t ovm_idx3::leaf_xyidx () const {
-	return ((y & 7) << 3) | (x & 7);
+	uint8_t rx = (BIT(z,1) << 2) | (BIT(y, 1) << 1) | BIT(x, 1);
+	uint8_t ry = (z & 1) << 2 | (y & 1) << 1 | (x & 1);
+	return (ry << 3) | rx;
+//	return ((y & 7) << 3) | (x & 7);
 }
 
 ovm_idx3::operator float3 () const {
@@ -97,8 +101,11 @@ float3 ovm_tree::voxel_center (ovm_idx3 i) const {
 	return rootbox.origin + ((float3(i) + float3(0.5, 0.5, 0.5))* voxel_size(i.level));
 }
 
-bool ovm_tree::inside (float3 p) const {
-	return root->inside (to_idx(p));
+bool ovm_tree::contains (float3 p) const {
+	if (rootbox.contains (p)) {
+		return root->contains (to_idx(p));
+	}
+	return false;
 }
 
 void ovm_tree::boolean_op (const ovm_tree& t, BooleanOperation op) {
@@ -213,19 +220,25 @@ void internal_node::coalesce () {
 	}
 }
 
-bool leaf_node::inside (ovm_idx3 p) const {
-	cout << "Leaf check on " << p << "; zidx = " << p.leaf_zidx() << "; xyidx = " << p.leaf_xyidx() << endl;
-	cout << "\tvoxels[z] = " << bits(voxels[p.leaf_zidx()]) << endl;
+bool TRACE = false;
+
+bool leaf_node::contains (ovm_idx3 p) const {
+	if (TRACE) {
+		cout << "Leaf check on " << p << "; zidx = " << p.leaf_zidx() << "; xyidx = " << p.leaf_xyidx() << endl;
+		cout << "\tvoxels[z] = " << bits(voxels[p.leaf_zidx()]) << endl;
+	}
 	return (voxels[p.leaf_zidx()] & (1 << p.leaf_xyidx())) > 0;
 }
 
-bool internal_node::inside (ovm_idx3 p) const {
+bool internal_node::contains (ovm_idx3 p) const {
 	uint8_t i = p.child_index();
-	cout << "Checking " << p << " at " << *this << endl << "\twould be in child " << (int) i << endl;
+	if (TRACE) {
+		cout << "Checking " << p << " at " << *this << endl << "\twould be in child " << (int) i << endl;
+	}
 	if (has_child(i)) {
-		cout << "\trecurse" << endl;
+//		cout << "\trecurse" << endl;
 		p.down();
-		return ch[i]->inside (p);
+		return ch[i]->contains (p);
 	} else {
 		return (ch_inside & (1 << i)) > 0;
 	}
@@ -234,15 +247,41 @@ bool internal_node::inside (ovm_idx3 p) const {
 void leaf_node::model_isosurface (const ovm_tree &t, double (*dist)(float3)) {
 	float3 corner = t.voxel_corner (pos);
 	float3 size = t.voxel_size (0);
-	corner += size/2;	
+	corner += size/2;
+	double semidiag = size.length() / 1;	// this is for smallest level
+
+	/*
+	if (dist (t.voxel_center (pos)) <= 0) {
+		memset (&voxels[0], 255, 64);
+	} else {
+		memset (&voxels[0], 0, 64);
+	}
+	return;
+	*/
 //	cout << "LEAF at " << pos << " ==> " << corner << endl;
 	for (int z=0; z < 8; z++) {
 		voxels[z] = 0;
-		for (int y=0; y < 8; y++) {
-			for (int x=0; x < 8; x++) {
-				float3 p = corner + float3(x,y,z)*size;
-				if (dist(p) <= 0) {
-					voxels[z] |= (1 << (y*8 + x));
+		float3 vc = t.voxel_center (pos.child(z));
+		double d = dist(vc);
+		if (fabs(d) >= semidiag * 4) {
+			if (d <= 0) {
+				voxels[z] = UINT64_MAX;
+			}
+		} else {
+			for (int y=0; y < 8; y++) {
+				vc = t.voxel_center (pos.child(z).child(y));
+				d = dist(vc);
+				if (fabs(d) >= semidiag * 2) {
+					if (d <= 0) {
+						voxels[z] |= (255ull << (y*8));
+					}
+				} else {
+					for (int x=0; x < 8; x++) {
+						float3 p = corner + float3(x,y,z)*size;
+						if (dist(p) <= 0) {
+							voxels[z] |= (1 << (y*8 + x));
+						}
+					}
 				}
 			}
 		}
@@ -253,7 +292,7 @@ void internal_node::model_isosurface (const ovm_tree& t, double (*dist)(float3))
 	for (int i=0; i < 8; i++) {
 		float3 cc = t.voxel_center (pos.child(i));
 		double d = dist(cc);
-		if (fabs(d) < t.voxel_size (pos.level).length() / 2) {
+		if (fabs(d) < t.voxel_size (pos.level).length() / 1) {
 			subdivide (i)->model_isosurface (t, dist);
 		} else {
 			if (d < 0) {
@@ -279,8 +318,10 @@ int internal_node::count_nodes (bool leaf_only=false) const {
 	return ct;
 }
 
+int dct = 0;
 double sphere (float3 p) {
-	return p.length() - 1;
+	dct++;
+	return fmin(p.length() - 1, (p + float3(0,0.5,0)).length() - 1);
 }
 
 double cube (float3 p) {
@@ -291,15 +332,38 @@ double cube (float3 p) {
 
 }
 
+void test (const ovm_tree& t, int npoints, double (*dist)(float3)) {
+	long time = clock();
+	int errct = 0;
+	double avg_err = 0;
+	double max_err = 0;
+	for (int i=0; i < npoints; i++) {
+		float3 p = t.rootbox.random_point();
+		double d = dist(p);
+		double err = fabs(d);
+		bool ovm_inside = t.contains (p);
+		bool d_inside = d <= 0;
+		if (ovm_inside != d_inside) {
+			errct ++;
+			avg_err += err;
+			max_err = fmax(max_err, err);
+		}
+	}
+	cout << "Tested " << npoints << "points (" << ((double) clock() - time)/CLOCKS_PER_SEC << " sec); " << errct << " errors; avg_err = " << (avg_err / errct) << "; max_err = " << max_err << endl;
+}
+
 int main () {
-//	ovm_tree t (AABB(float3(-1, -1, -1), float3(2,2,2)), 4);
-	for (int i=4; i < 10; i++) {
+	//	ovm_tree t (AABB(float3(-1, -1, -1), float3(2,2,2)), 4);
+	for (int i=10; i < 11; i++) {
+		dct = 0;
 		long time = clock();
 		cout << "Will make tree with level " << i << " subdivision" << endl;
 		ovm_tree t (AABB(float3(-1, -1, -1), float3(2,2,1.97)), i, sphere);
-		cout << "\tTook " << ((double) clock() - time)/CLOCKS_PER_SEC << " sec" << endl;
+		cout << "\tTook " << ((double) clock() - time)/CLOCKS_PER_SEC << " sec, and " << dct << " distance evals" << endl;
 		cout << "\tRaw: " << t.count_nodes() << " nodes, " << t.count_nodes(true) << " leaves." << endl;
+		test (t, 5000000, sphere);
 		t.coalesce();
 		cout << "\tCoalesced: " << t.count_nodes() << " nodes, " << t.count_nodes(true) << " leaves." << endl;
+		test (t, 5000000, sphere);
 	}
 }

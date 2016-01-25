@@ -44,7 +44,7 @@ struct ovm_tree {
 	float3 voxel_size (uint8_t level) const;
 	float3 voxel_corner (ovm_idx3 i) const;
 	float3 voxel_center (ovm_idx3 i) const;
-	bool inside (float3) const;	// point test
+	bool contains (float3) const;	// point test
 
 	int count_nodes(bool) const;
 
@@ -59,7 +59,7 @@ struct ovm_node {
 
 	virtual void coalesce () =0;
 	virtual int can_coalesce () const =0;
-	virtual bool inside (ovm_idx3) const =0;
+	virtual bool contains (ovm_idx3) const =0;
 	virtual void model_isosurface (const ovm_tree&, double (*)(float3)) =0;
 	virtual int count_nodes (bool) const =0;
 };
@@ -70,7 +70,7 @@ struct leaf_node : public ovm_node {
 	leaf_node (ovm_idx3 p);
 	~leaf_node ();
 
-	bool inside (ovm_idx3) const;
+	bool contains (ovm_idx3) const;
 	void coalesce();
 	int can_coalesce () const;
 	void model_isosurface (const ovm_tree&, double (*)(float3));
@@ -88,7 +88,7 @@ struct internal_node : public ovm_node {
 
 	bool has_child (int) const;
 	ovm_node* subdivide(int ch);
-	bool inside (ovm_idx3) const;
+	bool contains (ovm_idx3) const;
 	void coalesce();
 	int can_coalesce () const;
 	void model_isosurface (const ovm_tree&, double (*)(float3));

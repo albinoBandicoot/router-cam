@@ -106,6 +106,10 @@ float3 float3::normalize () const {
 	return *this * (1.0/length());
 }
 
+float3 rand_float3 () {
+	return float3 (randf(), randf(), randf());
+}
+
 std::ostream& operator<< (std::ostream& o, const float3& p) {
 	return o << "(" << p.x << ", " << p.y << ", " << p.z << ")";
 }

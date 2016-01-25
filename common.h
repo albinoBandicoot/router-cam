@@ -7,6 +7,8 @@ using namespace std;
 
 enum BooleanOperation {INTERSECT, UNION, DIFFERENCE};
 
+double randf ();
+
 class float2 {
 	public:
 		double x,y;
@@ -56,8 +58,9 @@ class float3 {
 		float3 normalize () const;
 
 		friend ostream& operator<< (ostream&, const float3&);
-
 };
+
+float3 rand_float3 ();
 
 float3 operator+ (const float3& a, const float3 &b) ;
 
@@ -188,6 +191,8 @@ class AABB : public CommonShape {
 		AABB () : origin(float3()), size(float3()) {};	// to make the compiler shut up
 		AABB (float3 o, float3 s) : origin(o), size(s) {};
 		double distance (float3) const;
+		bool contains (float3) const;
+		float3 random_point () const ;
 		Interpoint<CommonShape> intersection (Ray) const;
 };
 
