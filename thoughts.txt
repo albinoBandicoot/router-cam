@@ -1,0 +1,64 @@
+CSG or BREP?
+BREP is probably more useful. 
+
+primitives:
+- circle
+- polygon
+- rectangle (convenience)
+- arc (?)
+
+operations:
+- extrude
+- cut
+- revolve?
+- booleans???
+
+Entities in representation:
+- points
+- linear edges
+- circles/arcs
+- polygonal faces (with holes...)
+- (partial) cylindrical faces
+- if revolve: toroidal faces
+
+For a simple starter application, how about we just have a CSG model of the stock, and then only allow a series of differences to be applied to it -- this way we essentially just model the actual operations. 
+
+Do we need restrictions on the things we can cut out? Can they be arbitrary CSG trees, or only primitives? (I guess the real question is: do we allow intersections before the difference) (and nested differences, I suppose)
+
+So the real question is, what exactly do we want for doing CAM?
+It would be very naive and perhaps even incorrect to just mill out all the subtracted bits; at least intersect them with the stock. 
+
+For CAM we'd like to know the entry portals; that is, the line/face aspect of the intersection (surface intersection) of the cutout with the stock. Hmmm: it's possible that you can have a machinable part with no entry portals -- if some other operation is done first, it will expose the new feature. I guess we are also interested in surface intersections between the cutouts that are contained in the interior of the stock. 
+
+For portals on planar faces: the portal must cover the entire projection of the feature onto the portal plane (eg a tapered hole with only the small end poking through doesn't work; if the large end pokes through then it does)
+
+What about portals on cylindrical faces? I guess what's actually required is projection onto a plane normal to the axis of the feature, in this case -- it will determine the (indexing) rotation of the cylinder. For planar faces though, the projection onto the plane will not be encompassed by the portal; needs a funky setup orientation. Actually I guess it's the same in both cases, the feature axis is what's important and is what defines the setup. 
+
+--
+think about just linear extrusions, the primitive. We need to consider the extrusion extended from one of its ends in the opposite direction until it breaches the surface of the stock: this clearance volume must pass completely through other cutouts. Note that if the face of the extrusion is already on the surface, the clearance volume is empty. It is not necessarily true that all of the cutouts the clearance volume intersects MUST be performed before this one: we just need some subset of those such that their union covers the clearance volume. 
+So look at intersections of the cutouts with the clearance volume. Any such intersection that has a portion that is not multiply covered means that cutout must be performed before the target operation. 
+
+To be safe and simple at first, could just mandate all of the intersecting cutouts need to be done first. This has false dependencies, but is probably ok.
+
+Can then do a topological sort to determine a valid sequence. However, we also care about efficiency, in particular the number of setup changes that are needed. In general there will probably not be very many dependencies; also some cutouts will be able to be done from multiple directions. 
+
+A general linear extrude can only be accomplished along its extrusion axis. However, for rectangles, it may be possible to go from any of the 3 axes; note though that the curves produced by the endmill will be placed differently depending on the choice. 
+
+We also need to consider cutter length and obstructions from both the spindle/chassis and the clamping/vice setup. In particular, holes deeper than the cutter length may be possible, provided that the next bit of spindle can fit in a (larger diameter) upper portion of the hole. This could be checked by making an auxiliary clearance volume for the spindle piece that is an outset version of the extrusion face, that is offset along the axis by the cutter protrusion. In most cases this will lie completely outside the stock. This method also works for checking whether the spindle will hit, for instance, when drilling a hole next to a tall wall. 
+
+Clamps may require splitting operations into multiple chunks. 
+
+Once an order is established for the cutouts, paths need to be generated. A sequence of inset polygons (or circles, for circles) is computed with CGAL. Pay attention to direction of traversal (climb vs. conventional), this will be flipped if going from outside in vs inside out. Also need to be wary of splitting into multiple loops. One loop and what it contains should probably be done before moving onto the next. Entry and exit points from each cutout are determined.
+
+Between cutouts, the route between the exit point of the previous and entry point of the next cutout needs to be determined. It may not always even be safe to just lift the Z all the way, move XY, and drop the Z, though if you're doing something that tall you're probably asking for trouble anyway. How to check? Take the Minkowski sum of the spindle with the path and check for intersection with the part in its current state. This can be done in less generality, since the model for the spindle will probably be a cylinder for the tool, a cylinder for the little pokey bit of the spindle, and then a Z cutoff. If we project the relevant Z slice of the model onto the XY plane, then we just need an intersection of that with the disc Minkowski'd with the path, which is a rounded-end slot like thing. Sounds doable, depending how hard the projecting is.
+
+
+
+Or should we not think so much about verifying whether a path hits something or not, but rather computing the allowable configuration space of the tool? That sounds more useful. 
+
+Could this be reduced to 2D Minkowski with a disc (for a move that doesn't change Z (otherwise use lowest Z as an approximation))?  Yes -- take the disc plus the relevant Z slice of the model's projection onto XY plane. Do this for both discs, then intersect. How hard is computing the projection? From BREP, just project all the faces & union.this 
+
+
+Ordering cutouts within a single setup should be influenced by the inter-cutout motion distance. This could just be done as a TSP with Euclidean costs (though the entry/exit point are different for a city, so it's not quite a real Euclidean TSP), however that doesn't necessarily take into account costs incurred by other obstacles in the routes. So we could invoke route planning for all pairs to determine a more accurate cost. Whether that's worthwhile depends on how expensive route planning is (we'd go from a linear to quadratic number of invocations).
+
+Also, for many cutouts (esp pocketing) there could be many choices for entry/exit points (in general those are dependent on each other), which makes the problem trickier. 
