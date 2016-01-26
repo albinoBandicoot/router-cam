@@ -65,7 +65,7 @@ std::ostream& operator<< (std::ostream& o, const ovm_idx3& p) {
 
 /* OVM TREE methods */
 
-ovm_tree::ovm_tree (AABB bbox, int ml) {
+ovm_tree::ovm_tree (AABB<float3> bbox, int ml) {
 	rootbox = bbox;
 	root_level = ml;
 	root = new internal_node(ovm_idx3(0,0,0,root_level));
@@ -77,11 +77,11 @@ ovm_tree::ovm_tree (const ovm_tree& t) {
 	root = new internal_node(ovm_idx3(0,0,0,root_level));
 }
 
-ovm_tree::ovm_tree (AABB bbox, int ml, double (*dist)(float3)) {
+ovm_tree::ovm_tree (AABB<float3> bbox, int ml, CSGNode *csg) {
 	rootbox = bbox;
 	root_level = ml;
 	root = new internal_node(ovm_idx3(0,0,0,root_level));
-	root->model_isosurface (*this, dist);
+	root->model_isosurface (*this, *csg);
 }
 
 ovm_idx3 ovm_tree::to_idx (float3 p) const {
@@ -244,7 +244,7 @@ bool internal_node::contains (ovm_idx3 p) const {
 	}
 }
 
-void leaf_node::model_isosurface (const ovm_tree &t, double (*dist)(float3)) {
+void leaf_node::model_isosurface (const ovm_tree &t, const CSGNode& csg) {
 	float3 corner = t.voxel_corner (pos);
 	float3 size = t.voxel_size (0);
 	corner += size/2;
@@ -262,7 +262,7 @@ void leaf_node::model_isosurface (const ovm_tree &t, double (*dist)(float3)) {
 	for (int z=0; z < 8; z++) {
 		voxels[z] = 0;
 		float3 vc = t.voxel_center (pos.child(z));
-		double d = dist(vc);
+		double d = csg(vc);
 		if (fabs(d) >= semidiag * 4) {
 			if (d <= 0) {
 				voxels[z] = UINT64_MAX;
@@ -270,7 +270,7 @@ void leaf_node::model_isosurface (const ovm_tree &t, double (*dist)(float3)) {
 		} else {
 			for (int y=0; y < 8; y++) {
 				vc = t.voxel_center (pos.child(z).child(y));
-				d = dist(vc);
+				d = csg(vc);
 				if (fabs(d) >= semidiag * 2) {
 					if (d <= 0) {
 						voxels[z] |= (255ull << (y*8));
@@ -278,7 +278,7 @@ void leaf_node::model_isosurface (const ovm_tree &t, double (*dist)(float3)) {
 				} else {
 					for (int x=0; x < 8; x++) {
 						float3 p = corner + float3(x,y,z)*size;
-						if (dist(p) <= 0) {
+						if (csg(p) <= 0) {
 							voxels[z] |= (1 << (y*8 + x));
 						}
 					}
@@ -288,12 +288,12 @@ void leaf_node::model_isosurface (const ovm_tree &t, double (*dist)(float3)) {
 	}
 }
 
-void internal_node::model_isosurface (const ovm_tree& t, double (*dist)(float3)) {
+void internal_node::model_isosurface (const ovm_tree& t, const CSGNode& csg) {
 	for (int i=0; i < 8; i++) {
 		float3 cc = t.voxel_center (pos.child(i));
-		double d = dist(cc);
+		double d = csg(cc);
 		if (fabs(d) < t.voxel_size (pos.level).length() / 1) {
-			subdivide (i)->model_isosurface (t, dist);
+			subdivide (i)->model_isosurface (t, csg);
 		} else {
 			if (d < 0) {
 				ch_inside |= (1 << i);
@@ -318,28 +318,14 @@ int internal_node::count_nodes (bool leaf_only=false) const {
 	return ct;
 }
 
-int dct = 0;
-double sphere (float3 p) {
-	dct++;
-	return fmin(p.length() - 1, (p + float3(0,0.5,0)).length() - 1);
-}
-
-double cube (float3 p) {
-	double x = fmax (p.x - 0.5, -0.5 - p.x);
-	double y = fmax (p.y - 0.5, -0.5 - p.y);
-	double z = fmax (p.z - 0.5, -0.5 - p.z);
-	return fmax (x, fmax(y,z));
-
-}
-
-void test (const ovm_tree& t, int npoints, double (*dist)(float3)) {
+void test (const ovm_tree& t, int npoints, const CSGNode &csg) {
 	long time = clock();
 	int errct = 0;
 	double avg_err = 0;
 	double max_err = 0;
 	for (int i=0; i < npoints; i++) {
 		float3 p = t.rootbox.random_point();
-		double d = dist(p);
+		double d = csg(p);
 		double err = fabs(d);
 		bool ovm_inside = t.contains (p);
 		bool d_inside = d <= 0;
@@ -354,16 +340,16 @@ void test (const ovm_tree& t, int npoints, double (*dist)(float3)) {
 
 int main () {
 	//	ovm_tree t (AABB(float3(-1, -1, -1), float3(2,2,2)), 4);
+	CSGNode *csg = new BooleanNode (UNION, new ShapeNode<Sphere> (Sphere(float3(0,0.5,0), 1)), new ShapeNode<Sphere> (Sphere(float3(0,0,-0.2), 0.8)));
 	for (int i=10; i < 11; i++) {
-		dct = 0;
 		long time = clock();
 		cout << "Will make tree with level " << i << " subdivision" << endl;
-		ovm_tree t (AABB(float3(-1, -1, -1), float3(2,2,1.97)), i, sphere);
-		cout << "\tTook " << ((double) clock() - time)/CLOCKS_PER_SEC << " sec, and " << dct << " distance evals" << endl;
+		ovm_tree t (AABB<float3>(float3(-1, -1, -1), float3(2,2,1.97)), i, csg);
+		cout << "\tTook " << ((double) clock() - time)/CLOCKS_PER_SEC << " sec" << endl;
 		cout << "\tRaw: " << t.count_nodes() << " nodes, " << t.count_nodes(true) << " leaves." << endl;
-		test (t, 5000000, sphere);
+		test (t, 5000000, *csg);
 		t.coalesce();
 		cout << "\tCoalesced: " << t.count_nodes() << " nodes, " << t.count_nodes(true) << " leaves." << endl;
-		test (t, 5000000, sphere);
+		test (t, 5000000, *csg);
 	}
 }

@@ -2,6 +2,7 @@
 #define OVM_H
 
 #include "common.h"
+#include "csg.h"
 
 typedef uint16_t ovm_idx;
 
@@ -31,13 +32,13 @@ struct ovm_idx3 {
 };
 
 struct ovm_tree {
-	AABB rootbox;
+	AABB<float3> rootbox;
 	int root_level;
 	internal_node *root;
 
-	ovm_tree (AABB, int);
+	ovm_tree (AABB<float3>, int);
 	ovm_tree (const ovm_tree&);	// create a blank tree with same box and subdivision
-	ovm_tree (AABB, int, double (*dist) (float3));
+	ovm_tree (AABB<float3>, int, CSGNode *);
 
 	ovm_idx3 to_idx (float3) const;
 
@@ -60,7 +61,7 @@ struct ovm_node {
 	virtual void coalesce () =0;
 	virtual int can_coalesce () const =0;
 	virtual bool contains (ovm_idx3) const =0;
-	virtual void model_isosurface (const ovm_tree&, double (*)(float3)) =0;
+	virtual void model_isosurface (const ovm_tree&, const CSGNode&) =0;
 	virtual int count_nodes (bool) const =0;
 };
 
@@ -73,7 +74,7 @@ struct leaf_node : public ovm_node {
 	bool contains (ovm_idx3) const;
 	void coalesce();
 	int can_coalesce () const;
-	void model_isosurface (const ovm_tree&, double (*)(float3));
+	void model_isosurface (const ovm_tree&, const CSGNode&);
 	int count_nodes (bool) const ;
 	friend ostream& operator<< (ostream& o, const leaf_node& p) ;
 };
@@ -91,7 +92,7 @@ struct internal_node : public ovm_node {
 	bool contains (ovm_idx3) const;
 	void coalesce();
 	int can_coalesce () const;
-	void model_isosurface (const ovm_tree&, double (*)(float3));
+	void model_isosurface (const ovm_tree&, const CSGNode&);
 	int count_nodes(bool) const;
 	friend ostream& operator<< (ostream& o, const internal_node& p) ;
 };

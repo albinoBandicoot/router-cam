@@ -62,3 +62,9 @@ Could this be reduced to 2D Minkowski with a disc (for a move that doesn't chang
 Ordering cutouts within a single setup should be influenced by the inter-cutout motion distance. This could just be done as a TSP with Euclidean costs (though the entry/exit point are different for a city, so it's not quite a real Euclidean TSP), however that doesn't necessarily take into account costs incurred by other obstacles in the routes. So we could invoke route planning for all pairs to determine a more accurate cost. Whether that's worthwhile depends on how expensive route planning is (we'd go from a linear to quadratic number of invocations).
 
 Also, for many cutouts (esp pocketing) there could be many choices for entry/exit points (in general those are dependent on each other), which makes the problem trickier. 
+
+
+---------------
+Octrees
+
+

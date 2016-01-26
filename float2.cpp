@@ -12,6 +12,11 @@ float2::float2 (double a, double b) {
 	y = b;
 }
 
+float2::float2 (const float2& p) {
+	x = p.x;
+	y = p.y;
+}
+
 double float2::operator[] (int idx) {
 	return ((double *) this)[idx];
 }
@@ -47,16 +52,16 @@ void float2::operator/= (double a) {
 	y *= ar;
 }
 
-template<typename T>
-float2 operator* (float2 a, const T& b/* const float2 &b */) {
-	a *= b;
-	return a;
+float2 operator+ (const float2& a, const float2 &b) {
+	float2 res(a);
+	res += b;
+	return res;
 }
 
-template<typename T>
-float2 operator/ (float2 a, const T& b) {
-	a /= b;
-	return a;
+float2 operator- (const float2& a, const float2 &b) {
+	float2 res(a);
+	res -= b;
+	return res;
 }
 
 double float2::dot (const float2 &a) const {
@@ -69,6 +74,19 @@ double float2::length () const {
 
 float2 float2::normalize () const {
 	return *this * (1.0/length());
+}
+
+// 90 degrees clockwise from this
+float2 float2::perp_cw () const {
+	return float2 (y, -x);
+}
+
+float2 float2::perp_ccw () const {
+	return float2 (-y, x);
+}
+
+float2 float2::rand() {
+	return float2 (randf(), randf());
 }
 
 std::ostream& operator<< (std::ostream& o, const float2& p) {

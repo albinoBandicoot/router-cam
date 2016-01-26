@@ -3,17 +3,23 @@
 
 #include <ostream>
 #include <cmath>
+#include <vector>
 using namespace std;
 
-enum BooleanOperation {INTERSECT, UNION, DIFFERENCE};
+enum BooleanOperation {INTERSECTION, UNION, DIFFERENCE};
 
 double randf ();
+
+/* 2D and 3D POINTS */
 
 class float2 {
 	public:
 		double x,y;
 		float2();
+		float2(const float2&) ;
 		float2(double, double);
+
+		static float2 rand ();
 
 		void operator+= (const float2&); 
 		void operator-= (const float2&);
@@ -27,9 +33,27 @@ class float2 {
 		double dot (const float2&) const;
 		double length () const;
 		float2 normalize () const;
+		float2 perp_cw () const;
+		float2 perp_ccw () const;
 
 		friend ostream& operator<< (ostream&, const float2&);
 };
+
+float2 operator+ (const float2& a, const float2 &b) ;
+float2 operator- (const float2& a, const float2 &b) ;
+
+template<typename T>
+float2 operator* (const float2& a, const T& b) {
+	float2 res(a);
+	res *= b;
+	return res;
+}
+template<typename T>
+float2 operator/ (const float2& a, const T& b) {
+	float2 res(a);
+	res /= b;
+	return res;
+}
 
 class float3 {
 	public:
@@ -38,6 +62,8 @@ class float3 {
 		float3();
 		float3(const float3&);
 		float3(double, double, double);
+
+		static float3 rand ();
 
 		bool operator>= (const float3& a) const;
 		bool operator<= (const float3& a) const;
@@ -60,10 +86,7 @@ class float3 {
 		friend ostream& operator<< (ostream&, const float3&);
 };
 
-float3 rand_float3 ();
-
 float3 operator+ (const float3& a, const float3 &b) ;
-
 float3 operator- (const float3& a, const float3 &b) ;
 
 template<typename T>
@@ -79,6 +102,8 @@ float3 operator/ (const float3& a, const T& b) {
 	return res;
 }
 
+/* COMMON SHAPES */
+
 class Ray {
 	public:
 		float3 start, dir;
@@ -88,61 +113,50 @@ class Ray {
 		float3 operator() (double);
 };
 
-template <class Obj>
-class Interpoint {
-	public:
-		float3 ipt;
-		Obj *obj;
-		double t;	// ray parameter, if desired
-
-		Interpoint ();
-		Interpoint (float3, Obj *);
-		Interpoint (const Ray&, double, Obj*);
-		bool is_hit () const;
-		bool update (const Ray&, double, Obj*);
-};
-
-
+template<class P>
 class CommonShape {
 	public:
-		bool contains (float3 p) const {
+		bool contains (P p) const {
 			return distance (p) < 0;
 		}
-		bool on_surface (float3 p) const {
+		bool on_surface (P p) const {
 			return fabs(distance(p)) < 1e-8;
 		}
-		virtual double distance (float3) const =0;
-		virtual Interpoint<CommonShape> intersection (Ray) const =0;
+		double operator() (P p) const {
+			return distance(p);
+		}
+
+		virtual double distance (P) const =0;
 };
 
-class Segment : public CommonShape {
+template<class P>
+class Segment : public CommonShape<P> {
 	public:
 		float3 start;
 		float3 end;
 
-		Segment (float3, float3);
+		Segment (P, P);
 		Segment (Ray, double);
 		Segment (Ray, double, double);
 
-		double distance (float3) const;
-		Interpoint<CommonShape> intersection (Ray) const;
+		double distance (P) const;
 
 };
 
-class Line : public CommonShape {
+template<class P>
+class Line : public CommonShape<P>{
 	public:
-		float3 pt;
-		float3 dir;
+		P pt;
+		P dir;
 
-		Line (float3, float3);	// point and direction. use line_through_points for two points.
-		Line (Ray);
-		Line (Segment);
+		Line<P> (P, P);	// point and direction. use line_through_points for two points.
+//		Line (Ray);
+		Line<P> (Segment<P>);
 
-		double distance (float3) const;
-		Interpoint<CommonShape> intersection (Ray) const;
+		double distance (P) const;
 };
 
-class Plane : public CommonShape{
+class Plane : public CommonShape<float3> {
 	public:
 		float3 normal;
 		double offset;
@@ -154,11 +168,10 @@ class Plane : public CommonShape{
 
 		bool in_positive_halfspace (float3) const;
 		double distance (float3) const;
-		Interpoint<CommonShape> intersection (Ray) const;
 
 };
 
-class Cylinder : public CommonShape{
+class Cylinder : public CommonShape <float3>{
 	public:
 		float3 center;
 		float3 axis;
@@ -168,32 +181,54 @@ class Cylinder : public CommonShape{
 		Cylinder (float3, float3, double, double);
 
 		double distance (float3) const;
-		Interpoint<CommonShape> intersection (Ray) const;
 
 };
 
-class Sphere : public CommonShape{
+template<class P>
+class Hypersphere : public CommonShape<P> {
 	public:
-		float3 center;
+		P center;
 		double radius;
 
-		Sphere (float3 c, double r) : center(c), radius(r) {};
+		Hypersphere (P c, double r) : center(c), radius(r) {};
 
-		double distance (float3) const;
-		Interpoint<CommonShape> intersection (Ray) const;
+		double distance (P) const;
 };
 
-class AABB : public CommonShape {
+template<class P>
+double Hypersphere<P>::distance (P p) const {
+	return (p - center).length() - radius;
+}
+
+typedef Hypersphere<float2> Circle;
+typedef Hypersphere<float3> Sphere;
+
+template<class P>
+class AABB : public CommonShape<P> {
 	public:
-		float3 origin;
-		float3 size;
+		P origin;
+		P size;
 
-		AABB () : origin(float3()), size(float3()) {};	// to make the compiler shut up
-		AABB (float3 o, float3 s) : origin(o), size(s) {};
-		double distance (float3) const;
-		bool contains (float3) const;
-		float3 random_point () const ;
-		Interpoint<CommonShape> intersection (Ray) const;
+		AABB () : origin(P()), size(P()) {};	// to make the compiler shut up
+		AABB (P o, P s) : origin(o), size(s) {};
+		double distance (P) const;
+		bool contains (P) const;
+		P random_point () const ;
 };
+
+template<class P>
+double AABB<P>::distance (P p) const {
+	return 0;
+}
+
+template<class P>
+bool AABB<P>::contains (P p) const {
+	return p >= origin && p <= origin+size;
+}
+
+template<class P>
+P AABB<P>::random_point () const {
+	return origin + size*P::rand();
+}
 
 #endif

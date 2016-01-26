@@ -106,7 +106,7 @@ float3 float3::normalize () const {
 	return *this * (1.0/length());
 }
 
-float3 rand_float3 () {
+float3 float3::rand() {
 	return float3 (randf(), randf(), randf());
 }
 
