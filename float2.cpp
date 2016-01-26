@@ -76,6 +76,12 @@ float2 float2::normalize () const {
 	return *this * (1.0/length());
 }
 
+double float2::arg () const {
+	double res = atan2(y, x) / (2*M_PI);
+	if (res < 0) res += 1;
+	return res;
+}
+
 // 90 degrees clockwise from this
 float2 float2::perp_cw () const {
 	return float2 (y, -x);

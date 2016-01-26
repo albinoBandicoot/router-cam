@@ -33,6 +33,7 @@ class float2 {
 		double dot (const float2&) const;
 		double length () const;
 		float2 normalize () const;
+		double arg () const;
 		float2 perp_cw () const;
 		float2 perp_ccw () const;
 

@@ -337,7 +337,7 @@ void test (const ovm_tree& t, int npoints, const CSGNode &csg) {
 	}
 	cout << "Tested " << npoints << "points (" << ((double) clock() - time)/CLOCKS_PER_SEC << " sec); " << errct << " errors; avg_err = " << (avg_err / errct) << "; max_err = " << max_err << endl;
 }
-
+/*
 int main () {
 	//	ovm_tree t (AABB(float3(-1, -1, -1), float3(2,2,2)), 4);
 	CSGNode *csg = new BooleanNode (UNION, new ShapeNode<Sphere> (Sphere(float3(0,0.5,0), 1)), new ShapeNode<Sphere> (Sphere(float3(0,0,-0.2), 0.8)));
@@ -353,3 +353,4 @@ int main () {
 		test (t, 5000000, *csg);
 	}
 }
+*/

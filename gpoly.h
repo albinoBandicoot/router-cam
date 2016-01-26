@@ -64,14 +64,26 @@ class GCircle : public GSeg {
 	public:
 		Circle c;
 
+		GCircle () : c(Circle(float2(), 1)) {};
+		GCircle (Circle circ) : c(circ) {};
+
 		float2 operator() (double) const;
+		float2 normal (double) const;
+		double project (float2) const;
 		int side_test (float2) const;
 };
 
 class GArc : public GCircle {
+	private:
+		double arg_start, arg_end;
+		bool cw;
 	public:
+		GArc (Circle circ, double th1, double th2, bool clockwise=false);
+		GArc (Circle circ, GVertex *, GVertex *, bool clockwise=false);
+
 		float2 operator() (double) const;
-		int side_test (float2) const;
+		float2 normal (double) const;
+		double project (float2) const;
 };
 
 struct ovm_tree;
